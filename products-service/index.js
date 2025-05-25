@@ -16,11 +16,11 @@ app.get('/products', async (req, res) => {
 });
 
 app.post('/products', async (req, res) => {
-    const { name, price } = req.body;
+    const { name, description, price } = req.body;
     try {
         const result = await pool.query(
-            'INSERT INTO products (name, price) VALUES ($1, $2) RETURNING *',
-            [name, price]
+            'INSERT INTO products (name, description, price) VALUES ($1, $2, $3) RETURNING *',
+            [name, description, price]
         );
         res.json(result.rows[0]);
     } catch (err) {
@@ -28,6 +28,7 @@ app.post('/products', async (req, res) => {
         res.status(500).json({ error: 'Server error' });
     }
 });
+
 
 app.listen(PORT, () => {
     console.log(`Products Service listening on port ${PORT}`);
