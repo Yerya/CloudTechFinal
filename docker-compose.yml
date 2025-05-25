@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: grocery_db
+    volumes:
+      - ./postgres/data:/var/lib/postgresql/data
+
+  orders-service:
+    build: ./orders-service
+    ports:
+      - "5001:5000"
+    depends_on:
+      - postgres
+
+  products-service:
+    build: ./products-service
+    ports:
+      - "5002:5000"
+    depends_on:
+      - postgres
+
+  delivery-service:
+    build: ./delivery-service
+    ports:
+      - "5003:5000"
+    depends_on:
+      - postgres
+
+  payments-service:
+    build: ./payments-service
+    ports:
+      - "5004:5000"
+    depends_on:
+      - postgres
