@@ -32,16 +32,16 @@ app.get('/metrics', (req, res) => {
 // GET /delivery - получить все доставки
 app.get('/delivery', async (req, res) => {
     try {
-        const cached = cache.get('deliveries');
+        const cached = cache.get('delivery');
         if (cached) return res.json(cached);
 
-        const result = await pool.query('SELECT * FROM deliveries');
+        const result = await pool.query('SELECT * FROM delivery');
         const deliveries = result.rows.map(delivery => ({
             ...delivery,
             address: delivery.address ? decrypt(delivery.address) : null
         }));
 
-        cache.set('deliveries', deliveries);
+        cache.set('delivery', deliveries);
         res.json(deliveries);
     } catch (err) {
         console.error('Error in GET /delivery:', err);
@@ -51,11 +51,11 @@ app.get('/delivery', async (req, res) => {
 
 // POST /delivery - создать новую доставку
 app.post('/delivery', async (req, res) => {
-    const { order_id, address, status } = req.body;
+    const { order_id, address, delivery_date } = req.body;
     try {
         const result = await pool.query(
-            'INSERT INTO deliveries (order_id, address, status) VALUES ($1, $2, $3) RETURNING *',
-            [order_id, address ? encrypt(address) : null, status]
+            'INSERT INTO delivery (order_id, address, delivery_date) VALUES ($1, $2, $3) RETURNING *',
+            [order_id, address ? encrypt(address) : null, delivery_date]
         );
 
         const delivery = {
@@ -63,7 +63,7 @@ app.post('/delivery', async (req, res) => {
             address: result.rows[0].address ? decrypt(result.rows[0].address) : null
         };
 
-        cache.del('deliveries');
+        cache.del('delivery');
         res.json(delivery);
     } catch (err) {
         console.error('Error in POST /delivery:', err);
