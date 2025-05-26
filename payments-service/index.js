@@ -2,9 +2,34 @@ const express = require('express');
 const pool = require('./db');
 const app = express();
 const PORT = 5000;
+const fs = require('fs');
+const logStream = fs.createWriteStream('logs.txt', { flags: 'a' });
+
+app.use((req, res, next) => {
+    const logEntry = `${new Date().toISOString()} ${req.method} ${req.url}\n`;
+    logStream.write(logEntry);
+    console.log(logEntry);
+    next();
+});
 
 app.use(express.json());
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({ status: 'OK', service: 'payments', time: new Date().toISOString() });
+});
+
+// Metrics endpoint
+app.get('/metrics', (req, res) => {
+    res.json({
+        service: 'payments',
+        uptime: process.uptime(),
+        memoryUsage: process.memoryUsage(),
+        timestamp: new Date().toISOString()
+    });
+});
+
+// GET /payments - получить все платежи
 app.get('/payments', async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM payments');
@@ -15,6 +40,7 @@ app.get('/payments', async (req, res) => {
     }
 });
 
+// POST /payments - создать новый платеж
 app.post('/payments', async (req, res) => {
     const { order_id, amount, payment_date } = req.body;
     try {
@@ -29,7 +55,16 @@ app.post('/payments', async (req, res) => {
     }
 });
 
+let server;
+function startServer() {
+    server = app.listen(PORT, () => {
+        console.log(`Payments Service listening on port ${PORT}`);
+    });
+    return server;
+}
 
-app.listen(PORT, () => {
-    console.log(`Payments Service listening on port ${PORT}`);
-});
+if (require.main === module) {
+    startServer();
+}
+
+module.exports = { app, startServer };

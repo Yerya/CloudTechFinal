@@ -2,8 +2,32 @@ const express = require('express');
 const pool = require('./db');
 const app = express();
 const PORT = 5000;
+const fs = require('fs');
+const logStream = fs.createWriteStream('logs.txt', { flags: 'a' });
+
+app.use((req, res, next) => {
+    const logEntry = `${new Date().toISOString()} ${req.method} ${req.url}\n`;
+    logStream.write(logEntry);
+    console.log(logEntry);
+    next();
+});
 
 app.use(express.json());
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({ status: 'OK', service: 'orders', time: new Date().toISOString() });
+});
+
+// Metrics endpoint
+app.get('/metrics', (req, res) => {
+    res.json({
+        service: 'orders',
+        uptime: process.uptime(),
+        memoryUsage: process.memoryUsage(),
+        timestamp: new Date().toISOString()
+    });
+});
 
 // GET /orders - получить все заказы
 app.get('/orders', async (req, res) => {
@@ -34,3 +58,5 @@ app.post('/orders', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`Orders Service listening on port ${PORT}`);
 });
+
+module.exports = app;
