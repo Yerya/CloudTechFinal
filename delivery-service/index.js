@@ -1,14 +1,14 @@
 const express = require('express');
 const pool = require('./db');
+const { encrypt, decrypt } = require('./crypto');
+const cache = require('./cache');
 const app = express();
 const PORT = 5000;
 const fs = require('fs');
 const logStream = fs.createWriteStream('logs.txt', { flags: 'a' });
 
 app.use((req, res, next) => {
-    const logEntry = `${new Date().toISOString()} ${req.method} ${req.url}\n`;
-    logStream.write(logEntry);
-    console.log(logEntry);
+    logStream.write(`${new Date().toISOString()} ${req.method} ${req.url}\n`);
     next();
 });
 
@@ -32,8 +32,17 @@ app.get('/metrics', (req, res) => {
 // GET /delivery - получить все доставки
 app.get('/delivery', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM delivery');
-        res.json(result.rows);
+        const cached = cache.get('deliveries');
+        if (cached) return res.json(cached);
+
+        const result = await pool.query('SELECT * FROM deliveries');
+        const deliveries = result.rows.map(delivery => ({
+            ...delivery,
+            address: decrypt(delivery.address)
+        }));
+
+        cache.set('deliveries', deliveries);
+        res.json(deliveries);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Server error' });
@@ -42,13 +51,20 @@ app.get('/delivery', async (req, res) => {
 
 // POST /delivery - создать новую доставку
 app.post('/delivery', async (req, res) => {
-    const { order_id, address, delivery_date } = req.body;
+    const { order_id, address, status } = req.body;
     try {
         const result = await pool.query(
-            'INSERT INTO delivery (order_id, address, delivery_date) VALUES ($1, $2, $3) RETURNING *',
-            [order_id, address, delivery_date]
+            'INSERT INTO deliveries (order_id, address, status) VALUES ($1, $2, $3) RETURNING *',
+            [order_id, encrypt(address), status]
         );
-        res.json(result.rows[0]);
+
+        const delivery = {
+            ...result.rows[0],
+            address: decrypt(result.rows[0].address)
+        };
+
+        cache.del('deliveries');
+        res.json(delivery);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Server error' });

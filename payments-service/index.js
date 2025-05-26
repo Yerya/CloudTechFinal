@@ -1,14 +1,14 @@
 const express = require('express');
 const pool = require('./db');
+const { encrypt, decrypt } = require('./crypto');
+const cache = require('./cache');
 const app = express();
 const PORT = 5000;
 const fs = require('fs');
 const logStream = fs.createWriteStream('logs.txt', { flags: 'a' });
 
 app.use((req, res, next) => {
-    const logEntry = `${new Date().toISOString()} ${req.method} ${req.url}\n`;
-    logStream.write(logEntry);
-    console.log(logEntry);
+    logStream.write(`${new Date().toISOString()} ${req.method} ${req.url}\n`);
     next();
 });
 
@@ -32,11 +32,20 @@ app.get('/metrics', (req, res) => {
 // GET /payments - получить все платежи
 app.get('/payments', async (req, res) => {
     try {
+        const cached = cache.get('payments');
+        if (cached) return res.json(cached);
+
         const result = await pool.query('SELECT * FROM payments');
-        res.json(result.rows);
+        const payments = result.rows.map(payment => ({
+            ...payment,
+            amount: decrypt(payment.amount.toString())
+        }));
+
+        cache.set('payments', payments);
+        res.json(payments);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: 'Server error', details: err.message });
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
@@ -46,12 +55,19 @@ app.post('/payments', async (req, res) => {
     try {
         const result = await pool.query(
             'INSERT INTO payments (order_id, amount, payment_date) VALUES ($1, $2, $3) RETURNING *',
-            [order_id, amount, payment_date]
+            [order_id, encrypt(amount.toString()), payment_date]
         );
-        res.json(result.rows[0]);
+
+        const payment = {
+            ...result.rows[0],
+            amount: decrypt(result.rows[0].amount.toString())
+        };
+
+        cache.del('payments');
+        res.json(payment);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ error: 'Server error', details: err.message });
+        res.status(500).json({ error: 'Server error' });
     }
 });
 

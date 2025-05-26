@@ -1,0 +1,45 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Build and push Docker images
+        run: |
+          docker build -t yerya/orders-service:v3 ./orders-service
+          docker push yerya/orders-service:v3
+          docker build -t yerya/products-service:v3 ./products-service
+          docker push yerya/products-service:v3
+          docker build -t yerya/payments-service:v3 ./payments-service
+          docker push yerya/payments-service:v3
+          docker build -t yerya/delivery-service:v3 ./delivery-service
+          docker push yerya/delivery-service:v3
+
+      - name: Deploy to Azure Container Apps
+        run: |
+          az containerapp update --name orders-service --resource-group myResourceGroup --image yerya/orders-service:v3
+          az containerapp update --name products-service --resource-group myResourceGroup --image yerya/products-service:v3
+          az containerapp update --name payments-service --resource-group myResourceGroup --image yerya/payments-service:v3
+          az containerapp update --name delivery-service --resource-group myResourceGroup --image yerya/delivery-service:v3 

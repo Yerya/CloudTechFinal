@@ -1,14 +1,14 @@
 const express = require('express');
 const pool = require('./db');
+const { encrypt, decrypt } = require('./crypto');
+const cache = require('./cache');
 const app = express();
 const PORT = 5000;
 const fs = require('fs');
 const logStream = fs.createWriteStream('logs.txt', { flags: 'a' });
 
 app.use((req, res, next) => {
-    const logEntry = `${new Date().toISOString()} ${req.method} ${req.url}\n`;
-    logStream.write(logEntry);
-    console.log(logEntry);
+    logStream.write(`${new Date().toISOString()} ${req.method} ${req.url}\n`);
     next();
 });
 
@@ -32,8 +32,18 @@ app.get('/metrics', (req, res) => {
 // GET /orders - получить все заказы
 app.get('/orders', async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM public.orders');
-        res.json(result.rows);
+        const cached = cache.get('orders');
+        if (cached) return res.json(cached);
+
+        const result = await pool.query('SELECT * FROM orders');
+        const orders = result.rows.map(order => ({
+            ...order,
+            customer_name: decrypt(order.customer_name),
+            total_price: decrypt(order.total_price.toString())
+        }));
+
+        cache.set('orders', orders);
+        res.json(orders);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Server error' });
@@ -46,17 +56,33 @@ app.post('/orders', async (req, res) => {
     try {
         const result = await pool.query(
             'INSERT INTO orders (customer_name, product_name, quantity, total_price) VALUES ($1, $2, $3, $4) RETURNING *',
-            [customer_name, product_name, quantity, total_price]
+            [encrypt(customer_name), product_name, quantity, encrypt(total_price.toString())]
         );
-        res.json(result.rows[0]);
+
+        const order = {
+            ...result.rows[0],
+            customer_name: decrypt(result.rows[0].customer_name),
+            total_price: decrypt(result.rows[0].total_price.toString())
+        };
+
+        cache.del('orders');
+        res.json(order);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Orders Service listening on port ${PORT}`);
-});
+let server;
+function startServer() {
+    server = app.listen(PORT, () => {
+        console.log(`Orders Service listening on port ${PORT}`);
+    });
+    return server;
+}
 
-module.exports = app;
+if (require.main === module) {
+    startServer();
+}
+
+module.exports = { app, startServer };

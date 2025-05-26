@@ -1,14 +1,14 @@
 const express = require('express');
 const pool = require('./db');
+const { encrypt, decrypt } = require('./crypto');
+const cache = require('./cache');
 const app = express();
 const PORT = 5000;
 const fs = require('fs');
 const logStream = fs.createWriteStream('logs.txt', { flags: 'a' });
 
 app.use((req, res, next) => {
-    const logEntry = `${new Date().toISOString()} ${req.method} ${req.url}\n`;
-    logStream.write(logEntry);
-    console.log(logEntry);
+    logStream.write(`${new Date().toISOString()} ${req.method} ${req.url}\n`);
     next();
 });
 
@@ -32,8 +32,17 @@ app.get('/metrics', (req, res) => {
 // GET /products - получить все продукты
 app.get('/products', async (req, res) => {
     try {
+        const cached = cache.get('products');
+        if (cached) return res.json(cached);
+
         const result = await pool.query('SELECT * FROM products');
-        res.json(result.rows);
+        const products = result.rows.map(product => ({
+            ...product,
+            price: decrypt(product.price.toString())
+        }));
+
+        cache.set('products', products);
+        res.json(products);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Server error' });
@@ -46,9 +55,16 @@ app.post('/products', async (req, res) => {
     try {
         const result = await pool.query(
             'INSERT INTO products (name, description, price) VALUES ($1, $2, $3) RETURNING *',
-            [name, description, price]
+            [name, description, encrypt(price.toString())]
         );
-        res.json(result.rows[0]);
+
+        const product = {
+            ...result.rows[0],
+            price: decrypt(result.rows[0].price.toString())
+        };
+
+        cache.del('products');
+        res.json(product);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Server error' });
