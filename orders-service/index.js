@@ -38,15 +38,15 @@ app.get('/orders', async (req, res) => {
         const result = await pool.query('SELECT * FROM orders');
         const orders = result.rows.map(order => ({
             ...order,
-            customer_name: decrypt(order.customer_name),
-            total_price: decrypt(order.total_price.toString())
+            customer_name: order.customer_name ? decrypt(order.customer_name) : null,
+            total_price: order.total_price ? decrypt(order.total_price.toString()) : null
         }));
 
         cache.set('orders', orders);
         res.json(orders);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        console.error('Error in GET /orders:', err);
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
 
@@ -56,20 +56,25 @@ app.post('/orders', async (req, res) => {
     try {
         const result = await pool.query(
             'INSERT INTO orders (customer_name, product_name, quantity, total_price) VALUES ($1, $2, $3, $4) RETURNING *',
-            [encrypt(customer_name), product_name, quantity, encrypt(total_price.toString())]
+            [
+                customer_name ? encrypt(customer_name) : null,
+                product_name,
+                quantity,
+                total_price ? encrypt(total_price.toString()) : null
+            ]
         );
 
         const order = {
             ...result.rows[0],
-            customer_name: decrypt(result.rows[0].customer_name),
-            total_price: decrypt(result.rows[0].total_price.toString())
+            customer_name: result.rows[0].customer_name ? decrypt(result.rows[0].customer_name) : null,
+            total_price: result.rows[0].total_price ? decrypt(result.rows[0].total_price.toString()) : null
         };
 
         cache.del('orders');
         res.json(order);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        console.error('Error in POST /orders:', err);
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
 

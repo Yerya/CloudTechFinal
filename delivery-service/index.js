@@ -38,14 +38,14 @@ app.get('/delivery', async (req, res) => {
         const result = await pool.query('SELECT * FROM deliveries');
         const deliveries = result.rows.map(delivery => ({
             ...delivery,
-            address: decrypt(delivery.address)
+            address: delivery.address ? decrypt(delivery.address) : null
         }));
 
         cache.set('deliveries', deliveries);
         res.json(deliveries);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        console.error('Error in GET /delivery:', err);
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
 
@@ -55,19 +55,19 @@ app.post('/delivery', async (req, res) => {
     try {
         const result = await pool.query(
             'INSERT INTO deliveries (order_id, address, status) VALUES ($1, $2, $3) RETURNING *',
-            [order_id, encrypt(address), status]
+            [order_id, address ? encrypt(address) : null, status]
         );
 
         const delivery = {
             ...result.rows[0],
-            address: decrypt(result.rows[0].address)
+            address: result.rows[0].address ? decrypt(result.rows[0].address) : null
         };
 
         cache.del('deliveries');
         res.json(delivery);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        console.error('Error in POST /delivery:', err);
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
 

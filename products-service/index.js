@@ -38,14 +38,14 @@ app.get('/products', async (req, res) => {
         const result = await pool.query('SELECT * FROM products');
         const products = result.rows.map(product => ({
             ...product,
-            price: decrypt(product.price.toString())
+            price: product.price ? decrypt(product.price.toString()) : null
         }));
 
         cache.set('products', products);
         res.json(products);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        console.error('Error in GET /products:', err);
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
 
@@ -55,19 +55,19 @@ app.post('/products', async (req, res) => {
     try {
         const result = await pool.query(
             'INSERT INTO products (name, description, price) VALUES ($1, $2, $3) RETURNING *',
-            [name, description, encrypt(price.toString())]
+            [name, description, price ? encrypt(price.toString()) : null]
         );
 
         const product = {
             ...result.rows[0],
-            price: decrypt(result.rows[0].price.toString())
+            price: result.rows[0].price ? decrypt(result.rows[0].price.toString()) : null
         };
 
         cache.del('products');
         res.json(product);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        console.error('Error in POST /products:', err);
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
 

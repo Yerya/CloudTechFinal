@@ -38,14 +38,14 @@ app.get('/payments', async (req, res) => {
         const result = await pool.query('SELECT * FROM payments');
         const payments = result.rows.map(payment => ({
             ...payment,
-            amount: decrypt(payment.amount.toString())
+            amount: payment.amount ? decrypt(payment.amount.toString()) : null
         }));
 
         cache.set('payments', payments);
         res.json(payments);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        console.error('Error in GET /payments:', err);
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
 
@@ -55,19 +55,19 @@ app.post('/payments', async (req, res) => {
     try {
         const result = await pool.query(
             'INSERT INTO payments (order_id, amount, payment_date) VALUES ($1, $2, $3) RETURNING *',
-            [order_id, encrypt(amount.toString()), payment_date]
+            [order_id, amount ? encrypt(amount.toString()) : null, payment_date]
         );
 
         const payment = {
             ...result.rows[0],
-            amount: decrypt(result.rows[0].amount.toString())
+            amount: result.rows[0].amount ? decrypt(result.rows[0].amount.toString()) : null
         };
 
         cache.del('payments');
         res.json(payment);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        console.error('Error in POST /payments:', err);
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
 
