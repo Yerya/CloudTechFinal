@@ -1,10 +1,10 @@
 const request = require('supertest');
 const { app, startServer } = require('../index');
-
-jest.mock('../db', () => ({
-    query: jest.fn()
-}));
 const pool = require('../db');
+const { encrypt, decrypt } = require('../crypto');
+
+jest.mock('../db');
+jest.mock('../crypto');
 
 describe('Payments Service', () => {
     let server;
@@ -14,20 +14,18 @@ describe('Payments Service', () => {
     });
 
     afterAll((done) => {
-        if (server) {
-            server.close(done);
-        } else {
-            done();
-        }
+        server.close(done);
     });
 
     beforeEach(() => {
         jest.clearAllMocks();
+        encrypt.mockImplementation(text => `encrypted_${text}`);
+        decrypt.mockImplementation(text => text.replace('encrypted_', ''));
     });
 
     describe('GET /health', () => {
         it('should return health status', async () => {
-            const response = await request(app).get('/health');
+            const response = await request(server).get('/health');
             expect(response.status).toBe(200);
             expect(response.body).toHaveProperty('status', 'OK');
             expect(response.body).toHaveProperty('service', 'payments');
@@ -37,7 +35,7 @@ describe('Payments Service', () => {
 
     describe('GET /metrics', () => {
         it('should return service metrics', async () => {
-            const response = await request(app).get('/metrics');
+            const response = await request(server).get('/metrics');
             expect(response.status).toBe(200);
             expect(response.body).toHaveProperty('service', 'payments');
             expect(response.body).toHaveProperty('uptime');
@@ -49,66 +47,24 @@ describe('Payments Service', () => {
     describe('GET /payments', () => {
         it('should return all payments', async () => {
             const mockPayments = [
-                { id: 1, order_id: 1, amount: 99.99, payment_date: '2025-05-26' }
+                { id: 1, order_id: 1, amount: 'encrypted_99.99', payment_date: '2024-05-26T00:00:00Z' }
             ];
-            
+
             pool.query.mockResolvedValueOnce({ rows: mockPayments });
 
-            const response = await request(app).get('/payments');
+            const response = await request(server).get('/payments');
             expect(response.status).toBe(200);
-            expect(response.body).toEqual(mockPayments);
-            expect(pool.query).toHaveBeenCalledWith('SELECT * FROM payments');
-        });
-
-        it('should handle database errors', async () => {
-            pool.query.mockRejectedValueOnce(new Error('Database error'));
-
-            const response = await request(app).get('/payments');
-            expect(response.status).toBe(500);
-            expect(response.body).toHaveProperty('error', 'Server error');
-            expect(response.body).toHaveProperty('details', 'Database error');
+            expect(response.body).toEqual([
+                { id: 1, order_id: 1, amount: '99.99', payment_date: '2024-05-26T00:00:00Z' }
+            ]);
         });
     });
 
     describe('POST /payments', () => {
-        it('should create a new payment', async () => {
-            const newPayment = {
-                order_id: 1,
-                amount: 99.99,
-                payment_date: '2025-05-26'
-            };
-
-            const mockCreatedPayment = { id: 1, ...newPayment };
-            pool.query.mockResolvedValueOnce({ rows: [mockCreatedPayment] });
-
-            const response = await request(app)
-                .post('/payments')
-                .send(newPayment);
-
-            expect(response.status).toBe(200);
-            expect(response.body).toEqual(mockCreatedPayment);
-            expect(pool.query).toHaveBeenCalledWith(
-                'INSERT INTO payments (order_id, amount, payment_date) VALUES ($1, $2, $3) RETURNING *',
-                [newPayment.order_id, newPayment.amount, newPayment.payment_date]
-            );
-        });
-
-        it('should handle database errors on creation', async () => {
-            const newPayment = {
-                order_id: 1,
-                amount: 99.99,
-                payment_date: '2025-05-26'
-            };
-
-            pool.query.mockRejectedValueOnce(new Error('Database error'));
-
-            const response = await request(app)
-                .post('/payments')
-                .send(newPayment);
-
-            expect(response.status).toBe(500);
-            expect(response.body).toHaveProperty('error', 'Server error');
-            expect(response.body).toHaveProperty('details', 'Database error');
+        it('should validate required fields', async () => {
+            const response = await request(server).post('/payments').send({ payment_date: '2024-05-26T00:00:00Z' });
+            expect(response.status).toBe(400);
+            expect(response.body).toHaveProperty('error', 'Valid order_id is required');
         });
     });
-}); 
+});

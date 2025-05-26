@@ -45,23 +45,21 @@ app.get('/products', async (req, res) => {
         res.json(products);
     } catch (err) {
         console.error('Error in GET /products:', err);
-        res.status(500).json({ error: 'Server error', details: err.message });
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
 // POST /products - создать новый продукт
 app.post('/products', async (req, res) => {
     const { name, description, price } = req.body;
-    
-    // Validate required fields
+
     if (!name || name.trim() === '') {
         return res.status(400).json({ error: 'Name is required' });
     }
 
     try {
-        // Convert price to string safely
         const priceString = price != null ? price.toString() : null;
-        
+
         const result = await pool.query(
             'INSERT INTO products (name, description, price) VALUES ($1, $2, $3) RETURNING *',
             [name, description || null, priceString ? encrypt(priceString) : null]
@@ -76,7 +74,7 @@ app.post('/products', async (req, res) => {
         res.json(product);
     } catch (err) {
         console.error('Error in POST /products:', err);
-        res.status(500).json({ error: 'Server error', details: err.message });
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
