@@ -52,10 +52,19 @@ app.get('/products', async (req, res) => {
 // POST /products - создать новый продукт
 app.post('/products', async (req, res) => {
     const { name, description, price } = req.body;
+    
+    // Validate required fields
+    if (!name || name.trim() === '') {
+        return res.status(400).json({ error: 'Name is required' });
+    }
+
     try {
+        // Convert price to string safely
+        const priceString = price != null ? price.toString() : null;
+        
         const result = await pool.query(
             'INSERT INTO products (name, description, price) VALUES ($1, $2, $3) RETURNING *',
-            [name, description, price ? encrypt(price.toString()) : null]
+            [name, description || null, priceString ? encrypt(priceString) : null]
         );
 
         const product = {

@@ -52,10 +52,22 @@ app.get('/payments', async (req, res) => {
 // POST /payments - создать новый платеж
 app.post('/payments', async (req, res) => {
     const { order_id, amount, payment_date } = req.body;
+    
+    // Validate required fields
+    if (!order_id || typeof order_id !== 'number' || order_id <= 0) {
+        return res.status(400).json({ error: 'Valid order_id is required' });
+    }
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+        return res.status(400).json({ error: 'Valid amount is required' });
+    }
+
     try {
+        // Convert amount to string safely
+        const amountString = amount.toString();
+        
         const result = await pool.query(
             'INSERT INTO payments (order_id, amount, payment_date) VALUES ($1, $2, $3) RETURNING *',
-            [order_id, amount ? encrypt(amount.toString()) : null, payment_date]
+            [order_id, encrypt(amountString), payment_date || new Date()]
         );
 
         const payment = {

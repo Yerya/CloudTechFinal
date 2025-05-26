@@ -53,14 +53,27 @@ app.get('/orders', async (req, res) => {
 // POST /orders - создать новый заказ
 app.post('/orders', async (req, res) => {
     const { customer_name, product_name, quantity, total_price } = req.body;
+    
+    // Validate required fields
+    if (!product_name || product_name.trim() === '') {
+        return res.status(400).json({ error: 'Product name is required' });
+    }
+    if (!quantity || typeof quantity !== 'number' || quantity <= 0) {
+        return res.status(400).json({ error: 'Valid quantity is required' });
+    }
+
     try {
+        // Convert values safely
+        const customerNameString = customer_name ? customer_name.toString() : null;
+        const totalPriceString = total_price != null ? total_price.toString() : null;
+        
         const result = await pool.query(
             'INSERT INTO orders (customer_name, product_name, quantity, total_price) VALUES ($1, $2, $3, $4) RETURNING *',
             [
-                customer_name ? encrypt(customer_name) : null,
+                customerNameString ? encrypt(customerNameString) : null,
                 product_name,
                 quantity,
-                total_price ? encrypt(total_price.toString()) : null
+                totalPriceString ? encrypt(totalPriceString) : null
             ]
         );
 

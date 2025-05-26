@@ -52,10 +52,22 @@ app.get('/delivery', async (req, res) => {
 // POST /delivery - создать новую доставку
 app.post('/delivery', async (req, res) => {
     const { order_id, address, delivery_date } = req.body;
+    
+    // Validate required fields
+    if (!order_id || typeof order_id !== 'number' || order_id <= 0) {
+        return res.status(400).json({ error: 'Valid order_id is required' });
+    }
+    if (!address || address.trim() === '') {
+        return res.status(400).json({ error: 'Address is required' });
+    }
+
     try {
+        // Convert address to string safely
+        const addressString = address.toString();
+        
         const result = await pool.query(
             'INSERT INTO delivery (order_id, address, delivery_date) VALUES ($1, $2, $3) RETURNING *',
-            [order_id, address ? encrypt(address) : null, delivery_date]
+            [order_id, encrypt(addressString), delivery_date || new Date()]
         );
 
         const delivery = {
