@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
+  build-test-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -26,20 +26,34 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Build and push Docker images
+      # Build Docker images
+      - name: Build Docker images
         run: |
           docker build -t yerya/orders-service:v3 ./orders-service
-          docker push yerya/orders-service:v3
           docker build -t yerya/products-service:v3 ./products-service
-          docker push yerya/products-service:v3
           docker build -t yerya/payments-service:v3 ./payments-service
-          docker push yerya/payments-service:v3
           docker build -t yerya/delivery-service:v3 ./delivery-service
+
+      # Run tests before pushing
+      - name: Install and test services
+        run: |
+          cd orders-service && npm install && npm test && cd ..
+          cd products-service && npm install && npm test && cd ..
+          cd payments-service && npm install && npm test && cd ..
+          cd delivery-service && npm install && npm test && cd ..
+
+      # Push Docker images
+      - name: Push Docker images
+        run: |
+          docker push yerya/orders-service:v3
+          docker push yerya/products-service:v3
+          docker push yerya/payments-service:v3
           docker push yerya/delivery-service:v3
 
+      # Deploy to Azure
       - name: Deploy to Azure Container Apps
         run: |
           az containerapp update --name orders-service --resource-group myResourceGroup --image yerya/orders-service:v3
           az containerapp update --name products-service --resource-group myResourceGroup --image yerya/products-service:v3
           az containerapp update --name payments-service --resource-group myResourceGroup --image yerya/payments-service:v3
-          az containerapp update --name delivery-service --resource-group myResourceGroup --image yerya/delivery-service:v3 
+          az containerapp update --name delivery-service --resource-group myResourceGroup --image yerya/delivery-service:v3
