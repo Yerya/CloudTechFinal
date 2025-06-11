@@ -25,7 +25,7 @@ function decrypt(text) {
             console.error('Invalid encrypted data format:', text);
             return null;
         }
-        
+
         const iv = Buffer.from(textParts[0], 'hex');
         const encryptedText = textParts[1];
         const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
@@ -38,4 +38,5 @@ function decrypt(text) {
     }
 }
 
-module.exports = { encrypt, decrypt }; 
+module.exports = { encrypt, decrypt };
+//test
